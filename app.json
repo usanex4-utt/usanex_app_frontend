@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "UtaNexa",
+    "slug": "utanexa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#05070b",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.utanexa.app"
+    },
+    "android": {
+      "package": "com.utanexa.app"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "UtaNexa needs photo access to upload media."
+        }
+      ]
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}
