@@ -25,14 +25,12 @@ let onUnauthorized = () => {};
 export const setUnauthorizedHandler = (fn) => (onUnauthorized = fn);
 
 export async function loadSession() {
-  if (isWeb) return null;
   try { session = await store.get(COOKIE_NAME); } catch { session = null; }
   return session;
 }
 
 export async function clearSession() {
   session = null;
-  if (isWeb) return;
   try { await store.del(COOKIE_NAME); } catch {}
 }
 
@@ -67,12 +65,11 @@ function errorText(data, status) {
  * Resolves with parsed JSON; rejects with Error(message) using FastAPI's `detail`.
  */
 export async function api(path, { method = "GET", body, form, signal, silent401 } = {}) {
+  if (!session) await loadSession();
   const headers = { Accept: "application/json" };
   const ck = cookieHeader();
-  if (ck && !isWeb) {
-    headers.Cookie = ck;
-    headers.Authorization = `Bearer ${session}`;
-  }
+  if (ck && !isWeb) headers.Cookie = ck;
+  if (session) headers.Authorization = `Bearer ${session}`;
   if (body) headers["Content-Type"] = "application/json";
 
   let res;
@@ -96,7 +93,7 @@ export async function api(path, { method = "GET", body, form, signal, silent401 
 
   // Fallback when the platform hides Set-Cookie: accept the token from the login JSON body
   // (needs the 1-line backend change described in the README).
-  if (!isWeb && res.ok && data && typeof data.session_token === "string" && data.session_token) {
+  if (res.ok && data && typeof data.session_token === "string" && data.session_token) {
     session = data.session_token;
     try { await store.set(COOKIE_NAME, session); } catch {}
   }
