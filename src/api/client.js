@@ -69,7 +69,10 @@ function errorText(data, status) {
 export async function api(path, { method = "GET", body, form, signal, silent401 } = {}) {
   const headers = { Accept: "application/json" };
   const ck = cookieHeader();
-  if (ck && !isWeb) headers.Cookie = ck;
+  if (ck && !isWeb) {
+    headers.Cookie = ck;
+    headers.Authorization = `Bearer ${session}`;
+  }
   if (body) headers["Content-Type"] = "application/json";
 
   let res;

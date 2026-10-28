@@ -34,10 +34,10 @@ export function AuthProvider({ children }) {
     // screen would get 401 and bounce back to Login with no explanation.
     try {
       await api(EP.me, { silent401: true });
-    } catch {
+    } catch (e) {
       throw new Error(
-        "Login succeeded but the server session was not kept (cookie missing). " +
-        "Use the https:// URL in src/config.js, or apply the backend 'session_token' change from the README."
+        "Login succeeded, but session verification failed: " +
+        (e?.message || "Unknown error")
       );
     }
     setUser(d.user);
