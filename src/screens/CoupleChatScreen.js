@@ -100,9 +100,30 @@ export default function CoupleChatScreen({ navigation, route }) {
     const ackRead = (list) => list.filter((x) => x.sender_id !== user.id && x.id).slice(-20)
       .forEach((x) => wsSend({ type: "message_read", message_id: x.id }));
 
-    const connect = () => {
+    const connect = async () => {
       let ws;
-      try { ws = openSocket(EP.coupleWs(partner.user_id)); } catch { setConn("closed"); return; }
+      try {
+        ws = await openSocket(EP.coupleWs(partner.user_id));
+      } catch {
+        setConn("closed");
+        if (!closed) {
+          attempts += 1;
+          retry = setTimeout(
+            () => {
+              if (!closed) {
+                setConn("connecting");
+                connect();
+              }
+            },
+            Math.min(1000 * 2 ** attempts, 15000)
+          );
+        }
+        return;
+      }
+      if (closed) {
+        ws.close();
+        return;
+      }
       wsRef.current = ws;
       ws.onopen = () => {
         attempts = 0; setConn("open");

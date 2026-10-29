@@ -107,11 +107,12 @@ export async function api(path, { method = "GET", body, form, signal, silent401 
   return data;
 }
 
-/** Open a WebSocket to the backend with the session cookie attached. */
-export function openSocket(path) {
-  const url = WS_BASE_URL + path;
-  if (isWeb) return new WebSocket(url);
-  const ck = cookieHeader();
-  // React Native's WebSocket accepts a 3rd `options` argument with headers.
-  return new WebSocket(url, undefined, ck ? { headers: { Cookie: ck } } : undefined);
+/** Open an authenticated WebSocket using a short-lived, single-use ticket. */
+export async function openSocket(path) {
+  const data = await api("/api/chat/ws-ticket", { method: "POST" });
+  if (!data?.ticket) throw new Error("Could not create WebSocket ticket");
+  return new WebSocket(WS_BASE_URL + path, [
+    "utanexa-v1",
+    `ticket.${data.ticket}`,
+  ]);
 }

@@ -45,6 +45,7 @@ export default function ChatScreen({ navigation, route }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(false);
   const [lastSeen, setLastSeen] = useState(null);
@@ -70,10 +71,19 @@ export default function ChatScreen({ navigation, route }) {
   // ── typing / presence socket ────────────────────────────────
   useEffect(() => {
     let closed = false, retry, hide;
-    const connect = () => {
-      let ws;
-      try { ws = openSocket(EP.chatWs(peer.user_id)); } catch { return; }
-      wsRef.current = ws;
+    const connect = async () => {
+        let ws;
+        try {
+          ws = await openSocket(EP.chatWs(peer.user_id));
+        } catch {
+          if (!closed) retry = setTimeout(connect, 4000);
+          return;
+        }
+        if (closed) {
+          ws.close();
+          return;
+        }
+        wsRef.current = ws;
       ws.onmessage = (e) => {
         try {
           const m = JSON.parse(e.data);
@@ -108,12 +118,13 @@ export default function ChatScreen({ navigation, route }) {
   const send = async (file) => {
     const body = text.trim();
     if ((!body && !file) || sending) return;
-    const tmp = { id: `tmp${Date.now()}`, sender_id: user.id, content: body, pending: true, created_at: new Date().toISOString() };
-    setMessages((m) => [...m, tmp]); setText(""); sendTyping(false); setSending(true);
+    const tmp = { id: `tmp${Date.now()}`, sender_id: user.id, content: body, reply_to_message_id: replyTo?.id ?? null, reply_to: replyTo, pending: true, created_at: new Date().toISOString() };
+    setMessages((m) => [...m, tmp]); setText(""); setReplyTo(null); sendTyping(false); setSending(true);
     try {
       const fd = new FormData();
       fd.append("receiver_id", peer.user_id);
       fd.append("content", body);
+      if (replyTo?.id && !String(replyTo.id).startsWith("tmp")) fd.append("reply_to_message_id", String(replyTo.id));
       if (file) fd.append("file", file);
       const d = await api(EP.chatSend, { method: "POST", form: fd });
       setMessages((m) => m.map((x) => (x.id === tmp.id ? d.message : x)));
@@ -213,9 +224,29 @@ export default function ChatScreen({ navigation, route }) {
               );
             }
             const mine = m.sender_id === user.id;
+            const messageActions = (message) => {
+              const actions = [
+                { text: "Reply", onPress: () => setReplyTo(message) },
+                ...(message.sender_id === user.id
+                  ? [{ text: "Delete", style: "destructive", onPress: () => del(message) }]
+                  : []),
+                { text: "Cancel", style: "cancel" },
+              ];
+              Alert.alert("Message", "Choose an action", actions);
+            };
             const url = absUrl(m.media_url);
             return (
-              <Pressable onLongPress={() => del(m)} className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl ${mine ? "self-end bg-[#18385e]" : "self-start bg-[#151e2f]"}`} style={{ opacity: m.pending ? 0.6 : 1 }}>
+              <Pressable onLongPress={() => messageActions(m)} className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl ${mine ? "self-end bg-[#18385e]" : "self-start bg-[#151e2f]"}`} style={{ opacity: m.pending ? 0.6 : 1 }}>
+                {m.reply_to ? (
+                  <View className="mb-2 px-2 py-1.5 rounded-lg bg-[#0d1728] border-l-2 border-[#8bb8ff]">
+                    <Text numberOfLines={1} className="text-[#8bb8ff] text-xs font-bold">
+                      {m.reply_to.sender_id === user.id ? "You" : (peer.name || peer.username)}
+                    </Text>
+                    <Text numberOfLines={2} className="text-[#d1d9e8] text-xs">
+                      {m.reply_to.content || (m.reply_to.media_type ? m.reply_to.media_type.toUpperCase() : "Message")}
+                    </Text>
+                  </View>
+                ) : null}
                 {m.media_url && m.media_type === "image" ? <Image source={{ uri: url }} className="w-[220px] h-[220px] rounded-xl mb-1.5" resizeMode="cover" /> : null}
                 {m.media_url && m.media_type === "video" ? <Video source={{ uri: url }} useNativeControls resizeMode={ResizeMode.CONTAIN} style={{ width: 220, height: 220, borderRadius: 12, marginBottom: 6, backgroundColor: "#000" }} /> : null}
                 {m.media_url && m.media_type !== "image" && m.media_type !== "video" ? (
@@ -234,6 +265,17 @@ export default function ChatScreen({ navigation, route }) {
           }}
         />
 
+        {replyTo ? (
+          <View className="mx-3 mt-2 px-3 py-2 rounded-xl bg-[#151e2f] border-l-4 border-[#8bb8ff] flex-row items-center">
+            <View className="flex-1">
+              <Text className="text-[#8bb8ff] text-xs font-bold">Replying to {replyTo.sender_id === user.id ? "yourself" : (peer.name || peer.username)}</Text>
+              <Text numberOfLines={2} className="text-[#f4f6fb] text-sm">{replyTo.content || (replyTo.media_type ? replyTo.media_type.toUpperCase() : "Message")}</Text>
+            </View>
+            <Pressable onPress={() => setReplyTo(null)} className="p-2">
+              <Ionicons name="close" size={20} color="#96a3b9" />
+            </Pressable>
+          </View>
+        ) : null}
         <View className="flex-row items-end gap-2 px-3 py-2.5 bg-[#101726] border-t border-[#263249]">
           <Pressable onPress={attach} className="w-10 h-10 items-center justify-center"><Ionicons name="attach" size={24} color="#96a3b9" /></Pressable>
           <TextInput value={text} onChangeText={onChange} multiline maxLength={10000} placeholder="Message…" placeholderTextColor="#96a3b9"
