@@ -19,6 +19,20 @@ export const parseTime = (iso) => {
   return isNaN(d) ? null : d;
 };
 const hhmm = (iso) => parseTime(iso)?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+const chatDateLabel = (iso) => {
+  const d = parseTime(iso);
+  if (!d) return "Earlier";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  if (sameDay(d, today)) return "Today";
+  if (sameDay(d, yesterday)) return "Yesterday";
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+};
 const seen = (iso) => {
   const d = parseTime(iso);
   return d ? `last seen ${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
@@ -142,6 +156,18 @@ export default function ChatScreen({ navigation, route }) {
     ]);
   };
 
+  const displayMessages = [];
+  let previousDate = "";
+  messages.forEach((m) => {
+    const d = parseTime(m.created_at);
+    const dateKey = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : "unknown";
+    if (dateKey !== previousDate) {
+      displayMessages.push({ _dateSeparator: true, id: `date-${dateKey}`, label: chatDateLabel(m.created_at) });
+      previousDate = dateKey;
+    }
+    displayMessages.push(m);
+  });
+
   const status = error ? "Offline" : typing ? "typing…" : online ? "online" : seen(lastSeen) || "Private chat";
 
   return (
@@ -168,7 +194,7 @@ export default function ChatScreen({ navigation, route }) {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
         <FlatList
           ref={listRef}
-          data={messages}
+          data={displayMessages}
           keyExtractor={(m, i) => String(m.id ?? i)}
           contentContainerClassName="p-3.5 gap-2"
           ListHeaderComponent={
@@ -179,6 +205,13 @@ export default function ChatScreen({ navigation, route }) {
             </View>
           }
           renderItem={({ item: m }) => {
+            if (m._dateSeparator) {
+              return (
+                <View className="items-center py-2">
+                  <Text className="text-[#96a3b9] text-[11px] bg-[#151e2f] px-3 py-1 rounded-full">{m.label}</Text>
+                </View>
+              );
+            }
             const mine = m.sender_id === user.id;
             const url = absUrl(m.media_url);
             return (
